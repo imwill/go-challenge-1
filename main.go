@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	drum.DecodeFile("drum/fixtures/pattern_4.splice")
+	drum.DecodeFile("drum/fixtures/pattern_3.splice")
 }
