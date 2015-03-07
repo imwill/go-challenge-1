@@ -7,10 +7,10 @@ import "fmt"
 // rest of the data.
 // TODO: implement
 func DecodeFile(path string) (*Pattern, error) {
-	//p := &Pattern{}
-	p := readSplice(path)
+	p := &Pattern{}
+	err := readSplice(path, p)
 
-	return p, nil
+	return p, err
 }
 
 // Pattern is the high level representation of the
@@ -19,15 +19,22 @@ func DecodeFile(path string) (*Pattern, error) {
 type Pattern struct {
 	version string
 	tempo   float32
-	tracks  []struct {
-		id    int
-		name  string
-		steps [16]byte
-	}
+	tracks  []Track
+}
+
+// Track is the representation of a drum pattern's tracks
+type Track struct {
+	id    int
+	name  string
+	steps [16]byte
 }
 
 func (p Pattern) String() string {
 	output := fmt.Sprintf("Saved with HW Version: %v\n", p.version)
 	output += fmt.Sprintf("Tempo: %v\n", p.tempo)
+	for _, t := range p.tracks {
+		output += fmt.Sprintf("(%v) %v\t\n", t.id, t.name)
+	}
+
 	return output
 }

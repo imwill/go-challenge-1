@@ -1,9 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/imwill/go-challenge/drum"
 )
 
 func main() {
-	drum.DecodeFile("drum/fixtures/pattern_3.splice")
+	fmt.Print(drum.DecodeFile("drum/fixtures/pattern_1.splice"))
 }

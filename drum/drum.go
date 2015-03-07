@@ -11,15 +11,18 @@ import (
 	//"regexp"
 )
 
-func readSplice(path string) *Pattern {
-	var p Pattern
-	splice, _ := ioutil.ReadFile(path)
+func readSplice(path string, p *Pattern) error {
+	offset := 55
+	splice, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
 
 	p.version = string(bytes.Trim(splice[14:33], "\x00"))
 	p.tempo = getTempo(splice[46:51])
-	findTracks(splice, 55, &p)
+	findTracks(splice, &offset, p)
 
-	return &p
+	return nil
 }
 
 func getTempo(spliceData []byte) float32 {
@@ -28,14 +31,17 @@ func getTempo(spliceData []byte) float32 {
 	return float
 }
 
-func findTracks(splice []byte, offset int, p *Pattern) {
-	//append(p.tracks, {name: "", id: "", []})
+func findTracks(splice []byte, offset *int, p *Pattern) {
 	name := ""
+	track := Track{}
 
-	fmt.Print(int(splice[offset-5]))
+	track.id = int(splice[*offset-5])
 
-	for i := offset; i < len(splice); i++ {
-		offset++
+	fmt.Println(*offset)
+
+	for i := *offset; i < len(splice); i++ {
+		*offset++
+		fmt.Println(*offset)
 		if bytes.Equal([]byte{splice[i]}, []byte{0x00}) {
 			//name += string(splice[i])
 			break
@@ -46,21 +52,23 @@ func findTracks(splice []byte, offset int, p *Pattern) {
 		}
 	}
 
-	//append(p.tracks, {name: "", id: "", []})
-
-	fmt.Print(name + "\n")
-	/*
-		for i := 0; i < 16; i++ {
-			if bytes.Equal([]byte{splice[offset]}, []byte{0x00}) {
-				fmt.Print("-")
-			} else if bytes.Equal([]byte{splice[offset]}, []byte{0x01}) {
-				fmt.Print("x")
-			}
-			offset++
+	track.name = name
+	fmt.Println("step loop")
+	for i := 0; i < 16; i++ {
+		if bytes.Equal([]byte{splice[*offset]}, []byte{0x00}) {
+			track.steps[i] = byte(0)
+		} else if bytes.Equal([]byte{splice[*offset]}, []byte{0x01}) {
+			track.steps[i] = byte(1)
 		}
-	*/
-	if offset+20 <= len(splice) {
-		findTracks(splice, offset+20, p)
+		*offset++
+	}
+
+	p.tracks = append(p.tracks, track)
+
+	fmt.Printf("Name: %v; Offset: %d; Splice len: %v", name, *offset, len(splice))
+
+	if *offset <= len(splice) {
+		findTracks(splice, offset, p)
 	}
 
 }
