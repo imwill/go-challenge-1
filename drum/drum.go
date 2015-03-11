@@ -5,44 +5,59 @@ package drum
 import (
 	"bytes"
 	"encoding/binary"
-	//"fmt"
+	"errors"
 	"io/ioutil"
 	"math"
-	//"regexp"
 )
 
-func readSplice(path string, p *Pattern) error {
+func readSplice(path string, pattern *Pattern) error {
 	offset := 55
-	splice, err := ioutil.ReadFile(path)
-	if err != nil {
-		return err
+	splice, error1 := ioutil.ReadFile(path)
+	error2 := checkHeader(&splice)
+
+	if error1 != nil {
+		return error1
+	}
+	if error2 != nil {
+		return error2
 	}
 
-	p.version = string(bytes.Trim(splice[14:33], "\x00"))
-	p.tempo = findTempo(splice[46:51])
-	findTracks(splice, &offset, p)
+	pattern.version = string(bytes.Trim(splice[14:33], "\x00"))
+	findTempo(splice, pattern)
+	findTracks(splice, &offset, pattern)
 
 	return nil
 }
 
-func findTempo(spliceData []byte) float32 {
-	bits := binary.LittleEndian.Uint32(spliceData)
+func checkHeader(splice *[]byte) error {
+	header := []byte("SPLICE")
+	count := bytes.Count(*splice, header)
+
+	if count > 1 {
+		if index := bytes.LastIndex(*splice, header); index > 0 {
+			*splice = (*splice)[0:index]
+		}
+	} else {
+		if bytes.Index(*splice, header) != 0 {
+			return errors.New("No SPLICE header found in file! Wrong file format?")
+		}
+	}
+	return nil
+}
+
+func findTempo(spliceData []byte, pattern *Pattern) {
+	bits := binary.LittleEndian.Uint32(spliceData[46:51])
 	float := math.Float32frombits(bits)
-	return float
+	pattern.tempo = float
 }
 
 func findTracks(splice []byte, offset *int, p *Pattern) {
-	if *offset > len(splice) {
+	if len(splice) <= *offset {
 		return
 	}
 
-	name := ""
 	track := Track{}
 	track.id = int(splice[*offset-5])
-
-	if string(splice[*offset-5:*offset+1]) == "SPLICE" {
-		return
-	}
 
 	for {
 		if bytes.Equal([]byte{splice[*offset]}, []byte{0x00}) {
@@ -50,7 +65,7 @@ func findTracks(splice []byte, offset *int, p *Pattern) {
 		} else if bytes.Equal([]byte{splice[*offset]}, []byte{0x01}) {
 			break
 		} else {
-			name += string(splice[*offset])
+			track.name += string(splice[*offset])
 			*offset++
 		}
 	}
@@ -61,16 +76,13 @@ func findTracks(splice []byte, offset *int, p *Pattern) {
 
 	for i := 0; i < 16; i++ {
 		if bytes.Equal([]byte{splice[*offset]}, []byte{0x00}) {
-			//fmt.Printf("00 Name: %v, Offset: %d\n", name, *offset)
 			track.steps[i] = byte(0)
 		} else if bytes.Equal([]byte{splice[*offset]}, []byte{0x01}) {
-			//fmt.Printf("01 Name: %v, Offset: %d\n", name, *offset)
 			track.steps[i] = byte(1)
 		}
 		*offset++
 	}
 
-	track.name = name
 	p.tracks = append(p.tracks, track)
 
 	*offset = *offset + 5
