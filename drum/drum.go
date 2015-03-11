@@ -5,7 +5,7 @@ package drum
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
+	//"fmt"
 	"io/ioutil"
 	"math"
 	//"regexp"
@@ -19,56 +19,60 @@ func readSplice(path string, p *Pattern) error {
 	}
 
 	p.version = string(bytes.Trim(splice[14:33], "\x00"))
-	p.tempo = getTempo(splice[46:51])
+	p.tempo = findTempo(splice[46:51])
 	findTracks(splice, &offset, p)
 
 	return nil
 }
 
-func getTempo(spliceData []byte) float32 {
+func findTempo(spliceData []byte) float32 {
 	bits := binary.LittleEndian.Uint32(spliceData)
 	float := math.Float32frombits(bits)
 	return float
 }
 
 func findTracks(splice []byte, offset *int, p *Pattern) {
+	if *offset > len(splice) {
+		return
+	}
+
 	name := ""
 	track := Track{}
-
 	track.id = int(splice[*offset-5])
 
-	fmt.Println(*offset)
+	if string(splice[*offset-5:*offset+1]) == "SPLICE" {
+		return
+	}
 
-	for i := *offset; i < len(splice); i++ {
-		*offset++
-		fmt.Println(*offset)
-		if bytes.Equal([]byte{splice[i]}, []byte{0x00}) {
-			//name += string(splice[i])
+	for {
+		if bytes.Equal([]byte{splice[*offset]}, []byte{0x00}) {
 			break
-		} else if bytes.Equal([]byte{splice[i]}, []byte{0x01}) {
+		} else if bytes.Equal([]byte{splice[*offset]}, []byte{0x01}) {
 			break
 		} else {
-			name += string(splice[i])
+			name += string(splice[*offset])
+			*offset++
 		}
 	}
 
-	track.name = name
-	fmt.Println("step loop")
+	if *offset+16 > len(splice) {
+		return
+	}
+
 	for i := 0; i < 16; i++ {
 		if bytes.Equal([]byte{splice[*offset]}, []byte{0x00}) {
+			//fmt.Printf("00 Name: %v, Offset: %d\n", name, *offset)
 			track.steps[i] = byte(0)
 		} else if bytes.Equal([]byte{splice[*offset]}, []byte{0x01}) {
+			//fmt.Printf("01 Name: %v, Offset: %d\n", name, *offset)
 			track.steps[i] = byte(1)
 		}
 		*offset++
 	}
 
+	track.name = name
 	p.tracks = append(p.tracks, track)
 
-	fmt.Printf("Name: %v; Offset: %d; Splice len: %v", name, *offset, len(splice))
-
-	if *offset <= len(splice) {
-		findTracks(splice, offset, p)
-	}
-
+	*offset = *offset + 5
+	findTracks(splice, offset, p)
 }
