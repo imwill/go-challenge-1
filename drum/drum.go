@@ -10,25 +10,37 @@ import (
 	"math"
 )
 
-func readSplice(path string, pattern *Pattern) error {
-	offset := 55
-	splice, error1 := ioutil.ReadFile(path)
-	error2 := checkHeader(&splice)
+// Decode initializes the decoding of a drum machine file. The track data
+// always begins at the same offset.
+//
+// If the reading of a drum machine file fails or the header is invalid,
+// the decoding will be stopped immediately.
+func Decode(path string, p *Pattern) error {
+	offset := 50
+	splice, err1 := ioutil.ReadFile(path)
+	err2 := checkHeader(&splice)
 
-	if error1 != nil {
-		return error1
+	if err1 != nil {
+		return err1
 	}
-	if error2 != nil {
-		return error2
+	if err2 != nil {
+		return err2
 	}
 
-	pattern.version = string(bytes.Trim(splice[14:33], "\x00"))
-	findTempo(splice, pattern)
-	findTracks(splice, &offset, pattern)
+	p.version = string(bytes.Trim(splice[14:33], "\x00"))
+	fetchTempo(splice, p)
+	fetchTracks(splice, &offset, p)
 
 	return nil
 }
 
+// checkHeader analyzes the vailidity of a drum machine's header file
+//
+// If the SPLICE keyword appears twice, only the data before
+// the second appearance of the keyword is used for decoding.
+//
+// An error is returned if the SPLICE keyword appears only once and hasn't been
+// at the very beginning of the file.
 func checkHeader(splice *[]byte) error {
 	header := []byte("SPLICE")
 	count := bytes.Count(*splice, header)
@@ -39,30 +51,36 @@ func checkHeader(splice *[]byte) error {
 		}
 	} else {
 		if bytes.Index(*splice, header) != 0 {
-			return errors.New("No SPLICE header found in file! Wrong file format?")
+			return errors.New("no valid header found")
 		}
 	}
 	return nil
 }
 
-func findTempo(spliceData []byte, pattern *Pattern) {
-	bits := binary.LittleEndian.Uint32(spliceData[46:51])
-	float := math.Float32frombits(bits)
-	pattern.tempo = float
+// fetchTempo fetches the tempo of the drum machine file from a fixed position.
+func fetchTempo(spliceData []byte, pattern *Pattern) {
+	b := binary.LittleEndian.Uint32(spliceData[46:51])
+	f := math.Float32frombits(b)
+	pattern.tempo = f
 }
 
-func findTracks(splice []byte, offset *int, p *Pattern) {
-	if len(splice) <= *offset {
+// fetchTracks fetches one track starting from the specified offset. It will
+// repeat fetching tracks until the end of the drum machine data is reached.
+//
+// If there is not enough data for a valid track left, stop to fetch tracks.
+func fetchTracks(splice []byte, offset *int, p *Pattern) {
+	if len(splice) <= *offset+22 {
 		return
 	}
 
 	track := Track{}
-	track.id = int(splice[*offset-5])
+	track.id = int(splice[*offset])
+	*offset = *offset + 5
 
+	// Finds the name of the track by iterating over splice data.
+	// If a zero or one appears, stop iterating and continue with the steps.
 	for {
-		if bytes.Equal([]byte{splice[*offset]}, []byte{0x00}) {
-			break
-		} else if bytes.Equal([]byte{splice[*offset]}, []byte{0x01}) {
+		if IsByteZero(splice[*offset]) || IsByteOne(splice[*offset]) {
 			break
 		} else {
 			track.name += string(splice[*offset])
@@ -70,21 +88,24 @@ func findTracks(splice []byte, offset *int, p *Pattern) {
 		}
 	}
 
-	if *offset+16 > len(splice) {
-		return
-	}
-
+	// Finds the steps of the track by iterating over the following 16 bytes
+	// after the track id and name.
 	for i := 0; i < 16; i++ {
-		if bytes.Equal([]byte{splice[*offset]}, []byte{0x00}) {
-			track.steps[i] = byte(0)
-		} else if bytes.Equal([]byte{splice[*offset]}, []byte{0x01}) {
-			track.steps[i] = byte(1)
-		}
+		track.steps[i] = splice[*offset]
 		*offset++
 	}
 
 	p.tracks = append(p.tracks, track)
 
-	*offset = *offset + 5
-	findTracks(splice, offset, p)
+	fetchTracks(splice, offset, p)
+}
+
+// IsByteZero checks if the passed byte equals to the number 0.
+func IsByteZero(data byte) bool {
+	return bytes.Equal([]byte{data}, []byte{0x00})
+}
+
+// IsByteOne checks if the passed byte equals to the number 1.
+func IsByteOne(data byte) bool {
+	return bytes.Equal([]byte{data}, []byte{0x01})
 }

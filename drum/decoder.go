@@ -1,7 +1,6 @@
 package drum
 
 import (
-	"bytes"
 	"fmt"
 )
 
@@ -10,7 +9,7 @@ import (
 // rest of the data.
 func DecodeFile(path string) (*Pattern, error) {
 	p := &Pattern{}
-	err := readSplice(path, p)
+	err := Decode(path, p)
 
 	return p, err
 }
@@ -30,15 +29,17 @@ type Track struct {
 	steps [16]byte
 }
 
+// String formats the output of a Pattern and its containing tracks.
 func (p Pattern) String() string {
 	output := fmt.Sprintf("Saved with HW Version: %v\n", p.version)
 	output += fmt.Sprintf("Tempo: %v\n", p.tempo)
+
 	for _, t := range p.tracks {
 		steps := "|"
 		for i, s := range t.steps {
-			if bytes.Equal([]byte{s}, []byte{0x00}) {
+			if IsByteZero(s) {
 				steps += "-"
-			} else if bytes.Equal([]byte{s}, []byte{0x01}) {
+			} else if IsByteOne(s) {
 				steps += "x"
 			}
 
