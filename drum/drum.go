@@ -10,12 +10,12 @@ import (
 	"math"
 )
 
-// Decode initializes the decoding of a drum machine file. The track data
-// always begins at the same offset.
+// ParseSplice initializes the parsing of a drum machine file. The track data
+// always begins at the same offset (50).
 //
-// If the reading of a drum machine file fails or the header is invalid,
+// If the read of a drum machine file fails or the header is invalid,
 // the decoding will be stopped immediately.
-func Decode(path string, p *Pattern) error {
+func ParseSplice(path string, p *Pattern) error {
 	offset := 50
 	splice, err1 := ioutil.ReadFile(path)
 	err2 := checkHeader(&splice)
@@ -27,6 +27,7 @@ func Decode(path string, p *Pattern) error {
 		return err2
 	}
 
+	// Fetch the version from a fixed data range.
 	p.version = string(bytes.Trim(splice[14:33], "\x00"))
 	fetchTempo(splice, p)
 	fetchTracks(splice, &offset, p)
@@ -34,7 +35,7 @@ func Decode(path string, p *Pattern) error {
 	return nil
 }
 
-// checkHeader analyzes the vailidity of a drum machine's header file
+// checkHeader analyzes the vailidity of a drum machine's header file.
 //
 // If the SPLICE keyword appears twice, only the data before
 // the second appearance of the keyword is used for decoding.
@@ -43,9 +44,8 @@ func Decode(path string, p *Pattern) error {
 // at the very beginning of the file.
 func checkHeader(splice *[]byte) error {
 	header := []byte("SPLICE")
-	count := bytes.Count(*splice, header)
 
-	if count > 1 {
+	if bytes.Count(*splice, header) > 1 {
 		if index := bytes.LastIndex(*splice, header); index > 0 {
 			*splice = (*splice)[0:index]
 		}
@@ -58,10 +58,10 @@ func checkHeader(splice *[]byte) error {
 }
 
 // fetchTempo fetches the tempo of the drum machine file from a fixed position.
-func fetchTempo(spliceData []byte, pattern *Pattern) {
-	b := binary.LittleEndian.Uint32(spliceData[46:51])
+func fetchTempo(splice []byte, p *Pattern) {
+	b := binary.LittleEndian.Uint32(splice[46:51])
 	f := math.Float32frombits(b)
-	pattern.tempo = f
+	p.tempo = f
 }
 
 // fetchTracks fetches one track starting from the specified offset. It will
@@ -78,6 +78,7 @@ func fetchTracks(splice []byte, offset *int, p *Pattern) {
 	*offset = *offset + 5
 
 	// Finds the name of the track by iterating over splice data.
+	//
 	// If a zero or one appears, stop iterating and continue with the steps.
 	for {
 		if IsByteZero(splice[*offset]) || IsByteOne(splice[*offset]) {
@@ -89,9 +90,13 @@ func fetchTracks(splice []byte, offset *int, p *Pattern) {
 	}
 
 	// Finds the steps of the track by iterating over the following 16 bytes
-	// after the track id and name.
+	// after the track's id and name.
+	//
+	// If a step is not zero or one, don't consider it as a valid step.
 	for i := 0; i < 16; i++ {
-		track.steps[i] = splice[*offset]
+		if IsByteZero(splice[*offset]) || IsByteOne(splice[*offset]) {
+			track.steps[i] = splice[*offset]
+		}
 		*offset++
 	}
 

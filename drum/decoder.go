@@ -9,7 +9,7 @@ import (
 // rest of the data.
 func DecodeFile(path string) (*Pattern, error) {
 	p := &Pattern{}
-	err := Decode(path, p)
+	err := ParseSplice(path, p)
 
 	return p, err
 }
@@ -17,19 +17,19 @@ func DecodeFile(path string) (*Pattern, error) {
 // Pattern is the high level representation of the
 // drum pattern contained in a .splice file.
 type Pattern struct {
-	version string
 	tempo   float32
 	tracks  []Track
+	version string
 }
 
-// Track is the representation of a drum pattern's track data
+// Track is the representation of a drum pattern's track data.
 type Track struct {
 	id    int
 	name  string
 	steps [16]byte
 }
 
-// String formats the output of a Pattern and its containing tracks.
+// String formats the output of a Pattern and its containing Track data.
 func (p Pattern) String() string {
 	output := fmt.Sprintf("Saved with HW Version: %v\n", p.version)
 	output += fmt.Sprintf("Tempo: %v\n", p.tempo)
@@ -43,6 +43,7 @@ func (p Pattern) String() string {
 				steps += "x"
 			}
 
+			// Append a pipe character after every 4th step
 			if (i+1)%4 == 0 {
 				steps += "|"
 			}
